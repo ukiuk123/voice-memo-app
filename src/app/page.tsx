@@ -67,14 +67,16 @@ export default function HomePage() {
         body: JSON.stringify({ transcript }),
       });
       if (!summarizeRes.ok) throw new Error("要約に失敗しました");
-      const { summary } = await summarizeRes.json();
+      const { title, summary, tags } = await summarizeRes.json();
 
       // 3. Supabaseにメモ保存（user_id付き）
       const { error: insertError } = await supabase.from("memos").insert({
         user_id: session!.user.id,
         audio_url: null,
         transcript,
+        title: title ?? null,
         summary,
+        tags: tags ?? [],
         duration,
       });
       if (insertError) throw new Error("メモの保存に失敗しました");
@@ -88,6 +90,10 @@ export default function HomePage() {
   const handleDelete = async (id: string) => {
     await supabase.from("memos").delete().eq("id", id);
     setMemos((prev) => prev.filter((m) => m.id !== id));
+  };
+
+  const handleUpdate = (updated: Memo) => {
+    setMemos((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
   };
 
   const handleSignOut = async () => {
@@ -150,7 +156,7 @@ export default function HomePage() {
               読み込み中...
             </div>
           ) : (
-            <MemoList memos={memos} onDelete={handleDelete} />
+            <MemoList memos={memos} onDelete={handleDelete} onUpdate={handleUpdate} />
           )}
         </section>
       </div>

@@ -4,7 +4,9 @@ export type Memo = {
   user_id: string;
   audio_url: string | null;
   transcript: string | null;
+  title: string | null;
   summary: string | null;
+  tags: string[] | null;
   duration: number | null;
 };
 
