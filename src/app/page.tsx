@@ -1,33 +1,23 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import type { Session } from "@supabase/supabase-js";
+import Link from "next/link";
 import RecordButton from "@/components/RecordButton";
+import TextMemoInput from "@/components/TextMemoInput";
 import MemoList from "@/components/MemoList";
 import LoginPage from "@/components/LoginPage";
+import ReminderInbox from "@/components/ReminderInbox";
+import PushNotificationToggle from "@/components/PushNotificationToggle";
 import { supabase } from "@/lib/supabase";
+import { useSession } from "@/lib/useSession";
 import { Memo } from "@/types/memo";
 
 export default function HomePage() {
-  const [session, setSession] = useState<Session | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const { session, loading: authLoading } = useSession();
   const [memos, setMemos] = useState<Memo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setAuthLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
-      setSession(session);
-      setAuthLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+  const [mode, setMode] = useState<"voice" | "text">("voice");
 
   const fetchMemos = useCallback(async () => {
     const { data, error } = await supabase
@@ -47,10 +37,32 @@ export default function HomePage() {
     if (session) fetchMemos();
   }, [session, fetchMemos]);
 
+  const saveMemoFromTranscript = async (transcript: string, duration: number | null) => {
+    const summarizeRes = await fetch("/api/summarize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transcript }),
+    });
+    if (!summarizeRes.ok) throw new Error("要約に失敗しました");
+    const { title, summary, tags } = await summarizeRes.json();
+
+    const { error: insertError } = await supabase.from("memos").insert({
+      user_id: session!.user.id,
+      audio_url: null,
+      transcript,
+      title: title ?? null,
+      summary,
+      tags: tags ?? [],
+      duration,
+    });
+    if (insertError) throw new Error("メモの保存に失敗しました");
+
+    await fetchMemos();
+  };
+
   const handleRecordingComplete = async (blob: Blob, duration: number) => {
     setError(null);
     try {
-      // 1. Groqで文字起こし
       const formData = new FormData();
       formData.append("audio", blob, `${Date.now()}.webm`);
       const transcribeRes = await fetch("/api/transcribe", {
@@ -60,28 +72,16 @@ export default function HomePage() {
       if (!transcribeRes.ok) throw new Error("文字起こしに失敗しました");
       const { transcript } = await transcribeRes.json();
 
-      // 2. Groqで要約
-      const summarizeRes = await fetch("/api/summarize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript }),
-      });
-      if (!summarizeRes.ok) throw new Error("要約に失敗しました");
-      const { title, summary, tags } = await summarizeRes.json();
+      await saveMemoFromTranscript(transcript, duration);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "エラーが発生しました");
+    }
+  };
 
-      // 3. Supabaseにメモ保存（user_id付き）
-      const { error: insertError } = await supabase.from("memos").insert({
-        user_id: session!.user.id,
-        audio_url: null,
-        transcript,
-        title: title ?? null,
-        summary,
-        tags: tags ?? [],
-        duration,
-      });
-      if (insertError) throw new Error("メモの保存に失敗しました");
-
-      await fetchMemos();
+  const handleTextSubmit = async (text: string) => {
+    setError(null);
+    try {
+      await saveMemoFromTranscript(text, null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "エラーが発生しました");
     }
@@ -122,17 +122,60 @@ export default function HomePage() {
             </h1>
             <p className="text-xs text-gray-400 mt-1">{session.user.email}</p>
           </div>
-          <button
-            onClick={handleSignOut}
-            className="text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5 transition-colors"
-          >
-            ログアウト
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/analysis"
+              className="text-xs text-indigo-500 hover:text-indigo-700 border border-indigo-200 rounded-lg px-3 py-1.5 transition-colors"
+            >
+              🧠 分析
+            </Link>
+            <button
+              onClick={handleSignOut}
+              className="text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5 transition-colors"
+            >
+              ログアウト
+            </button>
+          </div>
         </header>
 
-        {/* Record Section */}
-        <section className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 flex flex-col items-center mb-6">
-          <RecordButton onRecordingComplete={handleRecordingComplete} />
+        <div className="mb-4">
+          <PushNotificationToggle />
+        </div>
+
+        <ReminderInbox memos={memos} />
+
+        {/* Input Section */}
+        <section className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 mb-6">
+          <div className="flex justify-center gap-1 mb-5 bg-gray-50 rounded-full p-1">
+            <button
+              onClick={() => setMode("voice")}
+              className={`text-xs font-semibold rounded-full px-4 py-1.5 transition-colors ${
+                mode === "voice"
+                  ? "bg-white text-indigo-600 shadow-sm"
+                  : "text-gray-400 hover:text-gray-600"
+              }`}
+            >
+              🎙️ 録音
+            </button>
+            <button
+              onClick={() => setMode("text")}
+              className={`text-xs font-semibold rounded-full px-4 py-1.5 transition-colors ${
+                mode === "text"
+                  ? "bg-white text-indigo-600 shadow-sm"
+                  : "text-gray-400 hover:text-gray-600"
+              }`}
+            >
+              ✏️ 入力
+            </button>
+          </div>
+
+          <div className="flex flex-col items-center">
+            {mode === "voice" ? (
+              <RecordButton onRecordingComplete={handleRecordingComplete} />
+            ) : (
+              <TextMemoInput onSubmit={handleTextSubmit} />
+            )}
+          </div>
         </section>
 
         {/* Error */}

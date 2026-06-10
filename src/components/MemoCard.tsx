@@ -3,14 +3,17 @@
 import { useState } from "react";
 import { Memo } from "@/types/memo";
 import { supabase } from "@/lib/supabase";
+import ReminderControl from "./ReminderControl";
+import RelatedMemos from "./RelatedMemos";
 
 type Props = {
   memo: Memo;
   onDelete: (id: string) => void;
   onUpdate: (updated: Memo) => void;
+  allMemos?: Memo[];
 };
 
-export default function MemoCard({ memo, onDelete, onUpdate }: Props) {
+export default function MemoCard({ memo, onDelete, onUpdate, allMemos }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(memo.transcript ?? "");
@@ -126,6 +129,12 @@ export default function MemoCard({ memo, onDelete, onUpdate }: Props) {
             {memo.summary}
           </p>
         </div>
+      )}
+
+      <ReminderControl memo={memo} onUpdate={onUpdate} />
+
+      {allMemos && allMemos.length > 1 && (
+        <RelatedMemos memo={memo} allMemos={allMemos} />
       )}
 
       {memo.transcript && (

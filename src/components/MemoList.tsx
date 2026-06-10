@@ -192,7 +192,13 @@ export default function MemoList({ memos, onDelete, onUpdate }: Props) {
         </div>
       ) : (
         filtered.map((memo) => (
-          <MemoCard key={memo.id} memo={memo} onDelete={onDelete} onUpdate={onUpdate} />
+          <MemoCard
+            key={memo.id}
+            memo={memo}
+            onDelete={onDelete}
+            onUpdate={onUpdate}
+            allMemos={memos}
+          />
         ))
       )}
     </div>
