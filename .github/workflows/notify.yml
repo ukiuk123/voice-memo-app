@@ -1,0 +1,39 @@
+name: Trigger reminder notifications
+
+on:
+  schedule:
+    # GitHub Actions cron は UTC、最小5分間隔
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit /api/notify
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "::error::APP_URL or CRON_SECRET secret not set"
+            exit 1
+          fi
+
+          response=$(curl -sS -X POST "$APP_URL/api/notify" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -w "\nHTTP_STATUS:%{http_code}")
+
+          status=$(echo "$response" | tail -n1 | sed 's/HTTP_STATUS://')
+          body=$(echo "$response" | sed '$d')
+
+          echo "Status: $status"
+          echo "Body: $body"
+
+          if [ "$status" != "200" ]; then
+            echo "::error::notify endpoint returned $status"
+            exit 1
+          fi
