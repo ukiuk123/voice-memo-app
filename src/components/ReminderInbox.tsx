@@ -1,31 +1,52 @@
 "use client";
 
-import { useMemo, useSyncExternalStore } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
+import { supabase } from "@/lib/supabase";
 import { Memo } from "@/types/memo";
 
 type Props = {
   memos: Memo[];
+  onUpdate: (memo: Memo) => void;
 };
 
+// 振り返り通知のチェック間隔（ミリ秒）
+const TICK_MS = 15_000;
+
 function subscribeToMinute(callback: () => void) {
-  const id = setInterval(callback, 60_000);
+  const id = setInterval(callback, TICK_MS);
   return () => clearInterval(id);
 }
 
 function getSnapshot() {
-  return Math.floor(Date.now() / 60_000);
+  return Math.floor(Date.now() / TICK_MS);
 }
 
 function getServerSnapshot() {
   return 0;
 }
 
-export default function ReminderInbox({ memos }: Props) {
-  const minute = useSyncExternalStore(subscribeToMinute, getSnapshot, getServerSnapshot);
+export default function ReminderInbox({ memos, onUpdate }: Props) {
+  const tick = useSyncExternalStore(subscribeToMinute, getSnapshot, getServerSnapshot);
+  const [dismissing, setDismissing] = useState<string | null>(null);
+
+  const dismiss = async (memo: Memo) => {
+    setDismissing(memo.id);
+    // 楽観的に通知を消す（reminder_enabled を false に）
+    onUpdate({ ...memo, reminder_enabled: false });
+    const { error } = await supabase
+      .from("memos")
+      .update({ reminder_enabled: false })
+      .eq("id", memo.id);
+    if (error) {
+      // 失敗したら元に戻す
+      onUpdate({ ...memo, reminder_enabled: true });
+    }
+    setDismissing(null);
+  };
 
   const due = useMemo(() => {
-    if (minute === 0) return [];
-    const now = minute * 60_000;
+    if (tick === 0) return [];
+    const now = tick * TICK_MS;
     return memos
       .filter(
         (m) =>
@@ -38,7 +59,7 @@ export default function ReminderInbox({ memos }: Props) {
           new Date(b.reminder_date!).getTime() -
           new Date(a.reminder_date!).getTime(),
       );
-  }, [memos, minute]);
+  }, [memos, tick]);
 
   if (due.length === 0) return null;
 
@@ -54,16 +75,25 @@ export default function ReminderInbox({ memos }: Props) {
         {due.slice(0, 5).map((m) => (
           <li
             key={m.id}
-            className="bg-white rounded-lg p-2.5 border border-amber-100"
+            className="bg-white rounded-lg p-2.5 border border-amber-100 flex items-start gap-2"
           >
-            <p className="text-sm font-semibold text-gray-800 truncate">
-              {m.title ?? "(無題)"}
-            </p>
-            {m.summary && (
-              <p className="text-xs text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">
-                {m.summary}
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-gray-800 truncate">
+                {m.title ?? "(無題)"}
               </p>
-            )}
+              {m.summary && (
+                <p className="text-xs text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">
+                  {m.summary}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => dismiss(m)}
+              disabled={dismissing === m.id}
+              className="shrink-0 text-xs font-semibold text-amber-700 bg-amber-100 hover:bg-amber-200 disabled:opacity-50 rounded-full px-3 py-1 transition-colors"
+            >
+              {dismissing === m.id ? "..." : "わかった"}
+            </button>
           </li>
         ))}
       </ul>

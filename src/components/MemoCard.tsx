@@ -5,6 +5,7 @@ import { Memo } from "@/types/memo";
 import { supabase } from "@/lib/supabase";
 import ReminderControl from "./ReminderControl";
 import RelatedMemos from "./RelatedMemos";
+import AIChatPanel from "./AIChatPanel";
 
 type Props = {
   memo: Memo;
@@ -136,6 +137,8 @@ export default function MemoCard({ memo, onDelete, onUpdate, allMemos }: Props) 
       {allMemos && allMemos.length > 1 && (
         <RelatedMemos memo={memo} allMemos={allMemos} />
       )}
+
+      <AIChatPanel memo={memo} allMemos={allMemos ?? []} />
 
       {memo.transcript && (
         <div className="space-y-2">

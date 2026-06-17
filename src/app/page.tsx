@@ -41,10 +41,14 @@ export default function HomePage() {
     const summarizeRes = await fetch("/api/summarize", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ transcript }),
+      body: JSON.stringify({
+        transcript,
+        now: new Date().toISOString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      }),
     });
     if (!summarizeRes.ok) throw new Error("要約に失敗しました");
-    const { title, summary, tags } = await summarizeRes.json();
+    const { title, summary, tags, reminder_date } = await summarizeRes.json();
 
     const { error: insertError } = await supabase.from("memos").insert({
       user_id: session!.user.id,
@@ -54,6 +58,9 @@ export default function HomePage() {
       summary,
       tags: tags ?? [],
       duration,
+      // メモ内に未来の日時があれば自動でリマインドON
+      reminder_date: reminder_date ?? null,
+      reminder_enabled: !!reminder_date,
     });
     if (insertError) throw new Error("メモの保存に失敗しました");
 
@@ -115,34 +122,42 @@ export default function HomePage() {
     <main className="min-h-screen bg-gray-50">
       <div className="max-w-md mx-auto px-4 pb-12">
         {/* Header */}
-        <header className="pt-12 pb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800 tracking-tight">
+        <header className="pt-12 pb-8">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-gray-800 tracking-tight whitespace-nowrap">
               🎙️ VoiceMemo
             </h1>
-            <p className="text-xs text-gray-400 mt-1">{session.user.email}</p>
+            <p className="text-xs text-gray-400 truncate min-w-0">
+              {session.user.email}
+            </p>
           </div>
-          <div className="flex items-center gap-2">
+          <nav className="flex items-center gap-2 mt-3">
+            <Link
+              href="/map"
+              className="text-xs text-indigo-500 hover:text-indigo-700 border border-indigo-200 rounded-lg px-3 py-1.5 transition-colors whitespace-nowrap"
+            >
+              🗺️ マップ
+            </Link>
             <Link
               href="/analysis"
-              className="text-xs text-indigo-500 hover:text-indigo-700 border border-indigo-200 rounded-lg px-3 py-1.5 transition-colors"
+              className="text-xs text-indigo-500 hover:text-indigo-700 border border-indigo-200 rounded-lg px-3 py-1.5 transition-colors whitespace-nowrap"
             >
               🧠 分析
             </Link>
             <button
               onClick={handleSignOut}
-              className="text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5 transition-colors"
+              className="text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5 transition-colors whitespace-nowrap ml-auto"
             >
               ログアウト
             </button>
-          </div>
+          </nav>
         </header>
 
         <div className="mb-4">
           <PushNotificationToggle />
         </div>
 
-        <ReminderInbox memos={memos} />
+        <ReminderInbox memos={memos} onUpdate={handleUpdate} />
 
         {/* Input Section */}
         <section className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 mb-6">
