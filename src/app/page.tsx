@@ -131,7 +131,7 @@ export default function HomePage() {
               {session.user.email}
             </p>
           </div>
-          <nav className="flex items-center gap-2 mt-3">
+          <nav className="flex flex-wrap items-center gap-2 mt-3">
             <Link
               href="/map"
               className="text-xs text-indigo-500 hover:text-indigo-700 border border-indigo-200 rounded-lg px-3 py-1.5 transition-colors whitespace-nowrap"
@@ -143,6 +143,12 @@ export default function HomePage() {
               className="text-xs text-indigo-500 hover:text-indigo-700 border border-indigo-200 rounded-lg px-3 py-1.5 transition-colors whitespace-nowrap"
             >
               🧠 分析
+            </Link>
+            <Link
+              href="/garden"
+              className="text-xs text-emerald-500 hover:text-emerald-700 border border-emerald-200 rounded-lg px-3 py-1.5 transition-colors whitespace-nowrap"
+            >
+              🌱 庭
             </Link>
             <button
               onClick={handleSignOut}
