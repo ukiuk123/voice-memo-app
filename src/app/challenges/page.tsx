@@ -30,6 +30,7 @@ export default function ChallengesPage() {
   const [draft, setDraft] = useState("");
   const [celebration, setCelebration] = useState<ThoughtChallenge | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [expandedWeapon, setExpandedWeapon] = useState<string | null>(null);
   const topRef = useRef<HTMLDivElement | null>(null);
 
   const active = activeChallengeOf(challenges);
@@ -351,17 +352,40 @@ export default function ChallengesPage() {
                       {candidateMemos.map((m) => (
                         <li
                           key={m.id}
-                          className="flex items-center gap-2 border border-gray-100 rounded-xl px-3 py-2"
+                          className="flex items-start gap-2 border border-gray-100 rounded-xl px-3 py-2"
                         >
                           <span className="text-base shrink-0">🗡️</span>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium text-gray-700 truncate">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedWeapon(expandedWeapon === m.id ? null : m.id)
+                            }
+                            className="min-w-0 flex-1 text-left cursor-pointer"
+                            title={
+                              m.summary
+                                ? `${m.title ?? "(無題)"}\n\n${m.summary}`
+                                : (m.title ?? "(無題)")
+                            }
+                          >
+                            <p
+                              className={`text-sm font-medium text-gray-700 ${
+                                expandedWeapon === m.id ? "" : "truncate"
+                              }`}
+                            >
                               {m.title ?? "(無題)"}
                             </p>
                             {m.summary && (
-                              <p className="text-xs text-gray-400 truncate">{m.summary}</p>
+                              <p
+                                className={`text-xs text-gray-400 ${
+                                  expandedWeapon === m.id
+                                    ? "whitespace-pre-line mt-0.5"
+                                    : "truncate"
+                                }`}
+                              >
+                                {m.summary}
+                              </p>
                             )}
-                          </div>
+                          </button>
                           <button
                             onClick={() => handleChallengeWith(m)}
                             disabled={busy}
