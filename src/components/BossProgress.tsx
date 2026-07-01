@@ -6,8 +6,9 @@ import {
   bossEmoji,
   bossMaxHp,
   brokenCountOf,
-  hpPercent,
-  hpRemaining,
+  hpPercentOf,
+  hpRemainingOf,
+  weaknessCount,
 } from "@/lib/challenge";
 
 type Props = {
@@ -22,8 +23,9 @@ type Props = {
 export default function BossProgress({ challenge, broken, compact }: Props) {
   const maxHp = bossMaxHp(challenge);
   const brokenCount = brokenCountOf(challenge, broken);
-  const hp = hpRemaining(maxHp, brokenCount);
-  const pct = hpPercent(maxHp, brokenCount);
+  const hp = hpRemainingOf(challenge, brokenCount);
+  const pct = hpPercentOf(challenge, brokenCount);
+  const weaknessesLeft = weaknessCount(challenge) - brokenCount;
 
   // HP が減るほど赤く（残り多い=エメラルド → 少ない=赤）
   const barColor =
@@ -56,7 +58,7 @@ export default function BossProgress({ challenge, broken, compact }: Props) {
           />
         </div>
         <p className="text-[10px] text-violet-400 mt-1">
-          残り弱点 {hp} 個 · タップして攻撃
+          残り弱点 {weaknessesLeft} 個 · タップして攻撃
         </p>
       </Link>
     );
@@ -85,7 +87,7 @@ export default function BossProgress({ challenge, broken, compact }: Props) {
         />
       </div>
       <p className="text-xs text-gray-500 mt-1.5 font-medium">
-        {hp > 0 ? `残りの弱点 ${hp} 個を崩せば撃破！` : "撃破！🎉"}
+        {hp > 0 ? `残りの弱点 ${weaknessesLeft} 個を崩せば撃破！` : "撃破！🎉"}
       </p>
     </div>
   );

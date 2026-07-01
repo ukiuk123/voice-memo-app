@@ -1,5 +1,10 @@
 import { supabase } from "./supabase";
-import { bossMaxHp, hpRemaining } from "./challenge";
+import {
+  bossMaxHp,
+  weaknessCount,
+  damagePerWeakness,
+  hpRemainingOf,
+} from "./challenge";
 import type {
   Memo,
   ThoughtChallenge,
@@ -107,10 +112,10 @@ export type AdvanceResult = {
   challenge: ThoughtChallenge;
   landed: boolean; // 攻撃が命中し弱点を崩したか
   justCleared: boolean; // 今回の一撃で撃破したか
-  damage: number; // 与ダメージ（崩した弱点数）
+  damage: number; // 与ダメージ（HP換算。崩した弱点数 × 弱点あたりダメージ）
   brokenNow: number[]; // 今回崩した弱点(index)
   hpRemaining: number; // 残りHP
-  maxHp: number; // 最大HP（弱点数）
+  maxHp: number; // 総HP
   note: string; // AI のバトル実況コメント
 };
 
@@ -123,7 +128,9 @@ export async function advanceChallenge(
   memo: Memo,
   allMemos: Memo[],
 ): Promise<AdvanceResult> {
-  const maxHp = bossMaxHp(challenge);
+  const maxHp = bossMaxHp(challenge); // 総HP（大きめの数値）
+  const n = weaknessCount(challenge); // 弱点の数（＝必要な有効打の数）
+  const dmgPer = damagePerWeakness(challenge); // 弱点1つあたりの与ダメージ
 
   const miss = (note: string, broken: Set<number>): AdvanceResult => ({
     challenge,
@@ -131,7 +138,7 @@ export async function advanceChallenge(
     justCleared: false,
     damage: 0,
     brokenNow: [],
-    hpRemaining: hpRemaining(maxHp, broken.size),
+    hpRemaining: hpRemainingOf(challenge, broken.size),
     maxHp,
     note,
   });
@@ -175,7 +182,7 @@ export async function advanceChallenge(
 
   // 弱点を特定できなかったがテーマに関連 → 未撃破の弱点を1つ崩す（有効打）
   if (newHits.length === 0 && judged.relevant) {
-    const next = Array.from({ length: maxHp }, (_, i) => i).find(
+    const next = Array.from({ length: n }, (_, i) => i).find(
       (i) => !broken.has(i),
     );
     if (next !== undefined) newHits = [next];
@@ -186,19 +193,21 @@ export async function advanceChallenge(
     return miss(judged.note || "攻撃は弱点を突けませんでした。", broken);
   }
 
+  const damage = newHits.length * dmgPer; // 今回の与ダメージ（HP換算）
+
   // 攻撃命中：ログ（＝攻撃履歴）を記録
   const { error: logErr } = await supabase.from("challenge_logs").insert({
     challenge_id: challenge.id,
     memo_id: memo.id,
     note: judged.note || null,
     hits: newHits,
-    damage: newHits.length,
+    damage,
   });
   if (logErr) return miss(judged.note || "", broken);
 
   const brokenCount = broken.size + newHits.length;
-  const percent = Math.min(100, Math.round((brokenCount / maxHp) * 100));
-  const defeated = brokenCount >= maxHp;
+  const percent = Math.min(100, Math.round((brokenCount / n) * 100));
+  const defeated = brokenCount >= n;
 
   if (!defeated) {
     const { data } = await supabase
@@ -211,9 +220,9 @@ export async function advanceChallenge(
       challenge: (data as ThoughtChallenge) ?? { ...challenge, progress: percent },
       landed: true,
       justCleared: false,
-      damage: newHits.length,
+      damage,
       brokenNow: newHits,
-      hpRemaining: hpRemaining(maxHp, brokenCount),
+      hpRemaining: hpRemainingOf(challenge, brokenCount),
       maxHp,
       note: judged.note,
     };
@@ -271,7 +280,7 @@ export async function advanceChallenge(
       { ...challenge, status: "cleared", progress: 100, summary, feedback },
     landed: true,
     justCleared: true,
-    damage: newHits.length,
+    damage,
     brokenNow: newHits,
     hpRemaining: 0,
     maxHp,

@@ -40,6 +40,7 @@ export default function ChallengesPage() {
     landed: boolean;
     justCleared: boolean;
     damage: number;
+    brokenNow: number[];
     hpRemaining: number;
     note: string;
   }) => {
@@ -47,7 +48,7 @@ export default function ChallengesPage() {
     if (r.landed)
       return {
         ok: true,
-        text: `⚔️ 会心の一撃！弱点を ${r.damage} つ崩した！ 残りHP ${r.hpRemaining}${r.note ? " ／ " + r.note : ""}`,
+        text: `⚔️ 会心の一撃！ ${r.damage} ダメージ（弱点 ${r.brokenNow.length} つ撃破・残りHP ${r.hpRemaining}）${r.note ? " ／ " + r.note : ""}`,
       };
     return {
       ok: false,
