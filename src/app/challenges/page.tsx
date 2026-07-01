@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/lib/useSession";
@@ -22,13 +22,30 @@ export default function ChallengesPage() {
   const [linkedIds, setLinkedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [note, setNote] = useState<string | null>(null);
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   const [draft, setDraft] = useState("");
   const [celebration, setCelebration] = useState<ThoughtChallenge | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const topRef = useRef<HTMLDivElement | null>(null);
 
   const active = activeChallengeOf(challenges);
+
+  // 進行判定の結果を、進行したかどうかが分かる文言に整える
+  const noteFromResult = (r: {
+    advanced: boolean;
+    justCleared: boolean;
+    note: string;
+  }) => {
+    if (r.justCleared) return null; // クリア演出側で表示する
+    if (r.advanced)
+      return { ok: true, text: `✅ 進行しました！${r.note ? " " + r.note : ""}` };
+    return {
+      ok: false,
+      text: `ℹ️ このメモはテーマとの関連が薄いようで、進行しませんでした。${r.note ? " " + r.note : ""}`,
+    };
+  };
 
   const refresh = useCallback(async () => {
     const [memoRes, chs] = await Promise.all([
@@ -69,19 +86,23 @@ export default function ChallengesPage() {
 
   // 既存メモでアクティブ Boss に挑む
   const handleChallengeWith = async (memo: Memo) => {
-    if (!active) return;
+    if (!active || busy) return;
     setBusy(true);
+    setPendingId(memo.id);
     setError(null);
     setNote(null);
     try {
       const result = await advanceChallenge(active, memo, memos);
-      setNote(result.note || null);
+      setNote(noteFromResult(result));
       if (result.justCleared) setCelebration(result.challenge);
       await refresh();
+      // 結果（進行バー・演出）は画面上部にあるため、タップ後に上へスクロール
+      topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (e) {
       setError(e instanceof Error ? e.message : "エラーが発生しました");
     } finally {
       setBusy(false);
+      setPendingId(null);
     }
   };
 
@@ -126,7 +147,7 @@ export default function ChallengesPage() {
         inserted as Memo,
         ...memos,
       ]);
-      setNote(result.note || null);
+      setNote(noteFromResult(result));
       if (result.justCleared) setCelebration(result.challenge);
       await refresh();
     } catch (e) {
@@ -170,6 +191,8 @@ export default function ChallengesPage() {
           </div>
           <span className="text-xs text-gray-400">Lv.{active?.level ?? cleared.length}</span>
         </header>
+
+        <div ref={topRef} className="scroll-mt-4" />
 
         {loading ? (
           <div className="text-center py-16 text-gray-300 text-sm">読み込み中...</div>
@@ -256,8 +279,14 @@ export default function ChallengesPage() {
                 </section>
 
                 {note && (
-                  <div className="bg-violet-50 border border-violet-100 text-violet-600 text-sm rounded-xl px-4 py-3">
-                    💬 {note}
+                  <div
+                    className={`text-sm rounded-xl px-4 py-3 border ${
+                      note.ok
+                        ? "bg-violet-50 border-violet-100 text-violet-600"
+                        : "bg-amber-50 border-amber-100 text-amber-700"
+                    }`}
+                  >
+                    {note.text}
                   </div>
                 )}
 
@@ -310,7 +339,7 @@ export default function ChallengesPage() {
                             disabled={busy}
                             className="text-xs text-violet-500 hover:text-violet-700 border border-violet-200 rounded-lg px-3 py-1.5 transition-colors shrink-0 disabled:opacity-40"
                           >
-                            挑む
+                            {pendingId === m.id ? "判定中..." : "挑む"}
                           </button>
                         </li>
                       ))}
