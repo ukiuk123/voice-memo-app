@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Memo } from "@/types/memo";
+import { Memo, ThoughtChallenge } from "@/types/memo";
 import MemoCard from "./MemoCard";
 import CalendarFilter from "./CalendarFilter";
 
@@ -9,6 +9,7 @@ type Props = {
   memos: Memo[];
   onDelete: (id: string) => void;
   onUpdate: (updated: Memo) => void;
+  activeChallenge?: ThoughtChallenge | null;
 };
 
 function parseTag(tag: string): { category: string; value: string } {
@@ -37,7 +38,7 @@ function toYMD(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-export default function MemoList({ memos, onDelete, onUpdate }: Props) {
+export default function MemoList({ memos, onDelete, onUpdate, activeChallenge }: Props) {
   const [query, setQuery] = useState("");
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -198,6 +199,7 @@ export default function MemoList({ memos, onDelete, onUpdate }: Props) {
             onDelete={onDelete}
             onUpdate={onUpdate}
             allMemos={memos}
+            activeChallenge={activeChallenge}
           />
         ))
       )}

@@ -8,9 +8,11 @@ import MemoList from "@/components/MemoList";
 import LoginPage from "@/components/LoginPage";
 import ReminderInbox from "@/components/ReminderInbox";
 import PushNotificationToggle from "@/components/PushNotificationToggle";
+import BossProgress from "@/components/BossProgress";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/lib/useSession";
-import { Memo } from "@/types/memo";
+import { Memo, ThoughtChallenge } from "@/types/memo";
+import { fetchActiveChallenge, advanceChallenge } from "@/lib/challengeClient";
 
 export default function HomePage() {
   const { session, loading: authLoading } = useSession();
@@ -18,6 +20,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"voice" | "text">("voice");
+  const [activeChallenge, setActiveChallenge] = useState<ThoughtChallenge | null>(null);
 
   const fetchMemos = useCallback(async () => {
     const { data, error } = await supabase
@@ -33,9 +36,16 @@ export default function HomePage() {
     setLoading(false);
   }, []);
 
+  const loadActiveChallenge = useCallback(async () => {
+    setActiveChallenge(await fetchActiveChallenge());
+  }, []);
+
   useEffect(() => {
-    if (session) fetchMemos();
-  }, [session, fetchMemos]);
+    if (session) {
+      fetchMemos();
+      loadActiveChallenge();
+    }
+  }, [session, fetchMemos, loadActiveChallenge]);
 
   const saveMemoFromTranscript = async (transcript: string, duration: number | null) => {
     const summarizeRes = await fetch("/api/summarize", {
@@ -50,21 +60,41 @@ export default function HomePage() {
     if (!summarizeRes.ok) throw new Error("要約に失敗しました");
     const { title, summary, tags, reminder_date } = await summarizeRes.json();
 
-    const { error: insertError } = await supabase.from("memos").insert({
-      user_id: session!.user.id,
-      audio_url: null,
-      transcript,
-      title: title ?? null,
-      summary,
-      tags: tags ?? [],
-      duration,
-      // メモ内に未来の日時があれば自動でリマインドON
-      reminder_date: reminder_date ?? null,
-      reminder_enabled: !!reminder_date,
-    });
-    if (insertError) throw new Error("メモの保存に失敗しました");
+    const { data: inserted, error: insertError } = await supabase
+      .from("memos")
+      .insert({
+        user_id: session!.user.id,
+        audio_url: null,
+        transcript,
+        title: title ?? null,
+        summary,
+        tags: tags ?? [],
+        duration,
+        // メモ内に未来の日時があれば自動でリマインドON
+        reminder_date: reminder_date ?? null,
+        reminder_enabled: !!reminder_date,
+      })
+      .select("*")
+      .single();
+    if (insertError || !inserted) throw new Error("メモの保存に失敗しました");
 
     await fetchMemos();
+
+    // V6: アクティブな思考チャレンジがあれば、追加メモで進行を判定する（ベストエフォート）
+    if (activeChallenge) {
+      try {
+        const result = await advanceChallenge(
+          activeChallenge,
+          inserted as Memo,
+          [inserted as Memo, ...memos],
+        );
+        setActiveChallenge(
+          result.challenge.status === "cleared" ? null : result.challenge,
+        );
+      } catch {
+        // 進行判定の失敗はメモ保存の成否に影響させない
+      }
+    }
   };
 
   const handleRecordingComplete = async (blob: Blob, duration: number) => {
@@ -150,6 +180,12 @@ export default function HomePage() {
             >
               🌱 庭
             </Link>
+            <Link
+              href="/challenges"
+              className="text-xs text-violet-500 hover:text-violet-700 border border-violet-200 rounded-lg px-3 py-1.5 transition-colors whitespace-nowrap"
+            >
+              👾 挑戦
+            </Link>
             <button
               onClick={handleSignOut}
               className="text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5 transition-colors whitespace-nowrap ml-auto"
@@ -164,6 +200,13 @@ export default function HomePage() {
         </div>
 
         <ReminderInbox memos={memos} onUpdate={handleUpdate} />
+
+        {/* V6: 現在の思考チャレンジ */}
+        {activeChallenge && (
+          <div className="mb-4">
+            <BossProgress challenge={activeChallenge} compact />
+          </div>
+        )}
 
         {/* Input Section */}
         <section className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 mb-6">
@@ -220,7 +263,12 @@ export default function HomePage() {
               読み込み中...
             </div>
           ) : (
-            <MemoList memos={memos} onDelete={handleDelete} onUpdate={handleUpdate} />
+            <MemoList
+              memos={memos}
+              onDelete={handleDelete}
+              onUpdate={handleUpdate}
+              activeChallenge={activeChallenge}
+            />
           )}
         </section>
       </div>

@@ -1,20 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { Memo } from "@/types/memo";
+import { Memo, ThoughtChallenge } from "@/types/memo";
 import { supabase } from "@/lib/supabase";
 import ReminderControl from "./ReminderControl";
 import RelatedMemos from "./RelatedMemos";
 import AIChatPanel from "./AIChatPanel";
+import BossProgress from "./BossProgress";
 
 type Props = {
   memo: Memo;
   onDelete: (id: string) => void;
   onUpdate: (updated: Memo) => void;
   allMemos?: Memo[];
+  activeChallenge?: ThoughtChallenge | null;
 };
 
-export default function MemoCard({ memo, onDelete, onUpdate, allMemos }: Props) {
+export default function MemoCard({ memo, onDelete, onUpdate, allMemos, activeChallenge }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(memo.transcript ?? "");
@@ -131,6 +133,9 @@ export default function MemoCard({ memo, onDelete, onUpdate, allMemos }: Props) 
           </p>
         </div>
       )}
+
+      {/* V6: 現在挑戦中の思考チャレンジ */}
+      {activeChallenge && <BossProgress challenge={activeChallenge} compact />}
 
       <ReminderControl memo={memo} onUpdate={onUpdate} />
 
