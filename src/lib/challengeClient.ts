@@ -1,11 +1,18 @@
 import { supabase } from "./supabase";
-import { progressPercent } from "./challenge";
+import { bossMaxHp, hpRemaining } from "./challenge";
 import type {
   Memo,
   ThoughtChallenge,
   ChallengeLog,
   GeneratedChallenge,
 } from "@/types/memo";
+
+// ログ配列から「崩した弱点(index)の集合」を求める。
+export function brokenSetOf(logs: ChallengeLog[]): Set<number> {
+  const set = new Set<number>();
+  for (const l of logs) for (const h of l.hits ?? []) set.add(h);
+  return set;
+}
 
 // =====================================================================
 // V6: Thought Boss のクライアント側オーケストレーション
@@ -98,33 +105,47 @@ export async function summonBoss(
 
 export type AdvanceResult = {
   challenge: ThoughtChallenge;
-  advanced: boolean; // このメモで進行したか
-  justCleared: boolean; // 今回クリアに到達したか
-  note: string; // AI の進行コメント
+  landed: boolean; // 攻撃が命中し弱点を崩したか
+  justCleared: boolean; // 今回の一撃で撃破したか
+  damage: number; // 与ダメージ（崩した弱点数）
+  brokenNow: number[]; // 今回崩した弱点(index)
+  hpRemaining: number; // 残りHP
+  maxHp: number; // 最大HP（弱点数）
+  note: string; // AI のバトル実況コメント
 };
 
-// 追加メモでアクティブ Boss の進行を判定・更新する。
-// - 起点メモ / 既にログ済みのメモは進行に使わない。
-// - 関連していればログを追加して進行率を更新。target 到達でクリア＋総評。
+// メモ（武器）でアクティブ Boss を攻撃し、弱点を崩して HP を削る。
+// - 起点メモ / 既に使った武器（ログ済みメモ）は攻撃に使えない。
+// - AI が突いた弱点（未撃破のもの）を崩し、HP を減らす。
+// - 全弱点を崩したら撃破 → 総評生成。
 export async function advanceChallenge(
   challenge: ThoughtChallenge,
   memo: Memo,
   allMemos: Memo[],
 ): Promise<AdvanceResult> {
-  const unchanged: AdvanceResult = {
-    challenge,
-    advanced: false,
-    justCleared: false,
-    note: "",
-  };
+  const maxHp = bossMaxHp(challenge);
 
-  if (challenge.status !== "active") return unchanged;
-  if (memo.id === challenge.memo_id) return unchanged; // 起点メモは対象外
+  const miss = (note: string, broken: Set<number>): AdvanceResult => ({
+    challenge,
+    landed: false,
+    justCleared: false,
+    damage: 0,
+    brokenNow: [],
+    hpRemaining: hpRemaining(maxHp, broken.size),
+    maxHp,
+    note,
+  });
+
+  if (challenge.status !== "active") return miss("", new Set());
+  if (memo.id === challenge.memo_id) return miss("", new Set()); // 起点メモは対象外
 
   const logs = await fetchLogs(challenge.id);
-  if (logs.some((l) => l.memo_id === memo.id)) return unchanged; // 二重加算防止
+  const broken = brokenSetOf(logs);
+  if (logs.some((l) => l.memo_id === memo.id)) {
+    return miss("この武器はもう使用済みです。", broken); // 二重加算防止
+  }
 
-  // 進行判定（AI）
+  // 攻撃判定（AI）: どの弱点を突いたか
   const judgeRes = await fetch("/api/challenge/judge", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -142,29 +163,44 @@ export async function advanceChallenge(
       },
     }),
   });
-  if (!judgeRes.ok) return unchanged;
+  if (!judgeRes.ok) return miss("攻撃に失敗しました。", broken);
   const judged = (await judgeRes.json()) as {
     relevant: boolean;
+    hits: number[];
     note: string;
   };
 
-  if (!judged.relevant) {
-    return { ...unchanged, note: judged.note };
+  // 未撃破の弱点だけを対象にする
+  let newHits = (judged.hits ?? []).filter((h) => !broken.has(h));
+
+  // 弱点を特定できなかったがテーマに関連 → 未撃破の弱点を1つ崩す（有効打）
+  if (newHits.length === 0 && judged.relevant) {
+    const next = Array.from({ length: maxHp }, (_, i) => i).find(
+      (i) => !broken.has(i),
+    );
+    if (next !== undefined) newHits = [next];
   }
 
-  // ログ追加
+  // どの弱点も崩せない → 空振り
+  if (newHits.length === 0) {
+    return miss(judged.note || "攻撃は弱点を突けませんでした。", broken);
+  }
+
+  // 攻撃命中：ログ（＝攻撃履歴）を記録
   const { error: logErr } = await supabase.from("challenge_logs").insert({
     challenge_id: challenge.id,
     memo_id: memo.id,
     note: judged.note || null,
+    hits: newHits,
+    damage: newHits.length,
   });
-  if (logErr) return { ...unchanged, note: judged.note };
+  if (logErr) return miss(judged.note || "", broken);
 
-  const current = logs.length + 1;
-  const percent = progressPercent(current, challenge.target_count);
-  const reached = current >= challenge.target_count;
+  const brokenCount = broken.size + newHits.length;
+  const percent = Math.min(100, Math.round((brokenCount / maxHp) * 100));
+  const defeated = brokenCount >= maxHp;
 
-  if (!reached) {
+  if (!defeated) {
     const { data } = await supabase
       .from("thought_challenges")
       .update({ progress: percent, updated_at: new Date().toISOString() })
@@ -173,13 +209,17 @@ export async function advanceChallenge(
       .single();
     return {
       challenge: (data as ThoughtChallenge) ?? { ...challenge, progress: percent },
-      advanced: true,
+      landed: true,
       justCleared: false,
+      damage: newHits.length,
+      brokenNow: newHits,
+      hpRemaining: hpRemaining(maxHp, brokenCount),
+      maxHp,
       note: judged.note,
     };
   }
 
-  // クリア到達 → 総評生成
+  // 撃破 → 総評生成
   const linkedIds = new Set([...logs.map((l) => l.memo_id), memo.id]);
   const linkedMemos = allMemos.filter((m) => linkedIds.has(m.id));
   let summary: string | null = null;
@@ -209,7 +249,7 @@ export async function advanceChallenge(
       feedback = fb.feedback ?? null;
     }
   } catch {
-    // 総評生成に失敗してもクリア自体は成立させる
+    // 総評生成に失敗しても撃破自体は成立させる
   }
 
   const { data } = await supabase
@@ -229,8 +269,12 @@ export async function advanceChallenge(
     challenge:
       (data as ThoughtChallenge) ??
       { ...challenge, status: "cleared", progress: 100, summary, feedback },
-    advanced: true,
+    landed: true,
     justCleared: true,
+    damage: newHits.length,
+    brokenNow: newHits,
+    hpRemaining: 0,
+    maxHp,
     note: judged.note,
   };
 }

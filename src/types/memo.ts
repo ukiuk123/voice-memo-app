@@ -66,6 +66,8 @@ export type ChallengeLog = {
   challenge_id: string;
   memo_id: string;
   note: string | null;
+  hits: number[]; // この攻撃で崩した弱点(questions)のindex
+  damage: number; // 与ダメージ（＝崩した弱点数）
 };
 
 // /api/challenge/generate が返す形

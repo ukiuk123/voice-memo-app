@@ -13,6 +13,7 @@ import {
   summonBoss,
   advanceChallenge,
   activeChallengeOf,
+  brokenSetOf,
 } from "@/lib/challengeClient";
 
 export default function ChallengesPage() {
@@ -20,6 +21,7 @@ export default function ChallengesPage() {
   const [memos, setMemos] = useState<Memo[]>([]);
   const [challenges, setChallenges] = useState<ThoughtChallenge[]>([]);
   const [linkedIds, setLinkedIds] = useState<Set<string>>(new Set());
+  const [brokenSet, setBrokenSet] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -32,18 +34,23 @@ export default function ChallengesPage() {
 
   const active = activeChallengeOf(challenges);
 
-  // 進行判定の結果を、進行したかどうかが分かる文言に整える
+  // 攻撃結果をバトルの実況文に整える
   const noteFromResult = (r: {
-    advanced: boolean;
+    landed: boolean;
     justCleared: boolean;
+    damage: number;
+    hpRemaining: number;
     note: string;
   }) => {
-    if (r.justCleared) return null; // クリア演出側で表示する
-    if (r.advanced)
-      return { ok: true, text: `✅ 進行しました！${r.note ? " " + r.note : ""}` };
+    if (r.justCleared) return null; // 撃破演出側で表示する
+    if (r.landed)
+      return {
+        ok: true,
+        text: `⚔️ 会心の一撃！弱点を ${r.damage} つ崩した！ 残りHP ${r.hpRemaining}${r.note ? " ／ " + r.note : ""}`,
+      };
     return {
       ok: false,
-      text: `ℹ️ このメモはテーマとの関連が薄いようで、進行しませんでした。${r.note ? " " + r.note : ""}`,
+      text: `🛡️ 攻撃は弱点を突けなかった…${r.note ? " " + r.note : "（テーマとの関連が薄いようです）"}`,
     };
   };
 
@@ -59,8 +66,10 @@ export default function ChallengesPage() {
     if (act) {
       const logs = await fetchLogs(act.id);
       setLinkedIds(new Set(logs.map((l) => l.memo_id)));
+      setBrokenSet(brokenSetOf(logs));
     } else {
       setLinkedIds(new Set());
+      setBrokenSet(new Set());
     }
     setLoading(false);
   }, []);
@@ -168,9 +177,9 @@ export default function ChallengesPage() {
   if (!session) return <LoginPage />;
 
   const cleared = challenges.filter((c) => c.status === "cleared");
-  const doneCount = linkedIds.size;
+  const brokenCount = brokenSet.size;
 
-  // 起点メモ・進行済みメモを除いた「挑めるメモ」候補
+  // 起点メモ・使用済みの武器（ログ済みメモ）を除いた「手持ちの武器」候補
   const candidateMemos = active
     ? memos.filter((m) => m.id !== active.memo_id && !linkedIds.has(m.id)).slice(0, 6)
     : [];
@@ -187,9 +196,11 @@ export default function ChallengesPage() {
             >
               ← 戻る
             </Link>
-            <h1 className="text-base font-bold text-gray-800">👾 思考チャレンジ</h1>
+            <h1 className="text-base font-bold text-gray-800">⚔️ 思考バトル</h1>
           </div>
-          <span className="text-xs text-gray-400">Lv.{active?.level ?? cleared.length}</span>
+          <span className="text-xs text-gray-400">
+            撃破 {cleared.length} 体
+          </span>
         </header>
 
         <div ref={topRef} className="scroll-mt-4" />
@@ -208,9 +219,11 @@ export default function ChallengesPage() {
                 >
                   ✕
                 </button>
-                <p className="text-2xl font-black tracking-wide mb-1">🎉 Boss Clear!</p>
+                <p className="text-2xl font-black tracking-wide mb-1">
+                  🎉 Boss 撃破！
+                </p>
                 <p className="text-sm font-semibold text-white/90 mb-3">
-                  {celebration.title}（Lv.{celebration.level}）
+                  {celebration.title}（Lv.{celebration.level}）を倒した！
                 </p>
                 {celebration.summary && (
                   <p className="text-sm leading-relaxed text-white/95 bg-white/10 rounded-xl p-3">
@@ -237,45 +250,53 @@ export default function ChallengesPage() {
             {/* アクティブ Boss */}
             {active ? (
               <>
-                <BossProgress challenge={active} current={doneCount} />
+                <BossProgress challenge={active} broken={brokenCount} />
 
-                {/* AI の投げかけ */}
+                {/* ボスの挑発 */}
                 <section className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5">
                   <p className="text-[11px] font-semibold text-violet-500 uppercase tracking-wide mb-2">
-                    AI からの問い
+                    💬 ボスの挑発
                   </p>
                   <p className="text-sm text-gray-700 leading-relaxed mb-4">
-                    {active.description}
+                    「{active.description}」
                   </p>
 
                   <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">
-                    深掘りステップ
+                    ボスの弱点（{brokenCount}/{active.questions.length} 撃破）
                   </p>
                   <ul className="space-y-2">
                     {active.questions.map((q, i) => {
-                      const stepDone = i < doneCount;
+                      const broken = brokenSet.has(i);
                       return (
                         <li key={i} className="flex items-start gap-2">
                           <span
-                            className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                              stepDone
-                                ? "bg-violet-500 text-white"
+                            className={`shrink-0 w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold ${
+                              broken
+                                ? "bg-rose-500 text-white"
                                 : "bg-gray-100 text-gray-400"
                             }`}
                           >
-                            {stepDone ? "✓" : i + 1}
+                            {broken ? "💥" : i + 1}
                           </span>
                           <span
                             className={`text-sm leading-relaxed ${
-                              stepDone ? "text-gray-400 line-through" : "text-gray-700"
+                              broken ? "text-gray-400 line-through" : "text-gray-700"
                             }`}
                           >
+                            {broken && (
+                              <span className="text-[10px] font-bold text-rose-500 mr-1">
+                                撃破
+                              </span>
+                            )}
                             {q}
                           </span>
                         </li>
                       );
                     })}
                   </ul>
+                  <p className="text-[11px] text-gray-400 mt-3">
+                    弱点に刺さるメモ（武器）で攻撃すると HP を削れます
+                  </p>
                 </section>
 
                 {note && (
@@ -290,17 +311,20 @@ export default function ChallengesPage() {
                   </div>
                 )}
 
-                {/* 新規メモで挑む */}
+                {/* メモを書いて武器を作り攻撃 */}
                 <section className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5">
-                  <p className="text-sm font-semibold text-gray-500 mb-3">
-                    メモを書いて挑む
+                  <p className="text-sm font-semibold text-gray-500 mb-1">
+                    🔨 メモを書いて武器を作る
+                  </p>
+                  <p className="text-[11px] text-gray-400 mb-3">
+                    弱点への考えを書くほど強い一撃になります
                   </p>
                   <textarea
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     rows={3}
                     disabled={busy}
-                    placeholder="問いへの考えを書いてみましょう…"
+                    placeholder="弱点への考えを書いて武器を鍛えよう…"
                     className="w-full text-sm text-gray-700 border border-gray-200 rounded-xl p-3 leading-relaxed focus:outline-none focus:ring-2 focus:ring-violet-300 resize-none disabled:opacity-50"
                   />
                   <div className="flex justify-end mt-2">
@@ -309,16 +333,19 @@ export default function ChallengesPage() {
                       disabled={busy || !draft.trim()}
                       className="text-xs text-white bg-violet-500 hover:bg-violet-600 rounded-lg px-4 py-2 transition-colors disabled:opacity-40"
                     >
-                      {busy ? "判定中..." : "メモを追加して挑む"}
+                      {busy ? "攻撃中..." : "⚔️ 武器を作って攻撃！"}
                     </button>
                   </div>
                 </section>
 
-                {/* 既存メモで挑む */}
+                {/* 手持ちの武器（既存メモ）で攻撃 */}
                 {candidateMemos.length > 0 && (
                   <section className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5">
-                    <p className="text-sm font-semibold text-gray-500 mb-3">
-                      最近のメモで挑む
+                    <p className="text-sm font-semibold text-gray-500 mb-1">
+                      🗡️ 手持ちの武器で攻撃
+                    </p>
+                    <p className="text-[11px] text-gray-400 mb-3">
+                      過去に書いたメモも武器になります。弱点を突けるか試そう
                     </p>
                     <ul className="space-y-2">
                       {candidateMemos.map((m) => (
@@ -326,6 +353,7 @@ export default function ChallengesPage() {
                           key={m.id}
                           className="flex items-center gap-2 border border-gray-100 rounded-xl px-3 py-2"
                         >
+                          <span className="text-base shrink-0">🗡️</span>
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium text-gray-700 truncate">
                               {m.title ?? "(無題)"}
@@ -337,9 +365,9 @@ export default function ChallengesPage() {
                           <button
                             onClick={() => handleChallengeWith(m)}
                             disabled={busy}
-                            className="text-xs text-violet-500 hover:text-violet-700 border border-violet-200 rounded-lg px-3 py-1.5 transition-colors shrink-0 disabled:opacity-40"
+                            className="text-xs text-white bg-violet-500 hover:bg-violet-600 rounded-lg px-3 py-1.5 transition-colors shrink-0 disabled:opacity-40"
                           >
-                            {pendingId === m.id ? "判定中..." : "挑む"}
+                            {pendingId === m.id ? "攻撃中..." : "攻撃"}
                           </button>
                         </li>
                       ))}
@@ -348,14 +376,14 @@ export default function ChallengesPage() {
                 )}
               </>
             ) : (
-              /* Boss 未召喚 */
+              /* Boss 未出現 */
               <section className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 text-center">
                 <p className="text-4xl mb-3">👾</p>
                 <p className="text-sm font-semibold text-gray-700 mb-1">
-                  挑戦中の Boss はいません
+                  出現中のボスはいません
                 </p>
                 <p className="text-xs text-gray-400 mb-4">
-                  最新のメモから AI が思考チャレンジを生成します
+                  最新のメモから AI が「思考のボス」を出現させます
                 </p>
                 <button
                   onClick={handleSummon}
@@ -363,19 +391,19 @@ export default function ChallengesPage() {
                   className="text-sm text-white bg-violet-500 hover:bg-violet-600 rounded-xl px-5 py-2.5 transition-colors disabled:opacity-40"
                 >
                   {busy
-                    ? "生成中..."
+                    ? "出現中..."
                     : memos.length === 0
                       ? "先にメモを作成してください"
-                      : "⚔️ Boss を召喚する"}
+                      : "⚔️ ボスを出現させる"}
                 </button>
               </section>
             )}
 
-            {/* 達成済みチャレンジ一覧 / Boss 履歴 */}
+            {/* 撃破したボス一覧 / 履歴 */}
             {cleared.length > 0 && (
               <section>
                 <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                  達成済みチャレンジ（{cleared.length}）
+                  撃破したボス（{cleared.length}）
                 </p>
                 <ul className="space-y-2">
                   {cleared.map((c) => {

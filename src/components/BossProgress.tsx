@@ -2,21 +2,36 @@
 
 import Link from "next/link";
 import { ThoughtChallenge } from "@/types/memo";
-import { bossEmoji, clearedCount, remainingLabel } from "@/lib/challenge";
+import {
+  bossEmoji,
+  bossMaxHp,
+  brokenCountOf,
+  hpPercent,
+  hpRemaining,
+} from "@/lib/challenge";
 
 type Props = {
   challenge: ThoughtChallenge;
-  // 実際に進行したメモ数（省略時は progress から逆算）
-  current?: number;
+  // 崩した弱点数（省略時は progress から逆算）
+  broken?: number;
   // メモ詳細用のコンパクト表示（リンク付きバナー）
   compact?: boolean;
 };
 
-// V6: Boss の進行状況バー。/challenges とメモ詳細で共用する。
-export default function BossProgress({ challenge, current, compact }: Props) {
-  const done = current ?? clearedCount(challenge);
-  const target = challenge.target_count;
-  const percent = challenge.progress;
+// V6: Boss の HP バー（RPGバトル）。/challenges とメモ詳細で共用する。
+export default function BossProgress({ challenge, broken, compact }: Props) {
+  const maxHp = bossMaxHp(challenge);
+  const brokenCount = brokenCountOf(challenge, broken);
+  const hp = hpRemaining(maxHp, brokenCount);
+  const pct = hpPercent(maxHp, brokenCount);
+
+  // HP が減るほど赤く（残り多い=エメラルド → 少ない=赤）
+  const barColor =
+    pct > 60
+      ? "from-emerald-400 to-emerald-500"
+      : pct > 30
+        ? "from-amber-400 to-orange-500"
+        : "from-rose-500 to-red-600";
 
   if (compact) {
     return (
@@ -27,19 +42,21 @@ export default function BossProgress({ challenge, current, compact }: Props) {
         <div className="flex items-center gap-2 mb-1.5">
           <span className="text-base leading-none">{bossEmoji(challenge.level)}</span>
           <p className="text-xs font-bold text-violet-700 truncate flex-1 min-w-0">
-            現在のチャレンジ · Boss Lv.{challenge.level}
+            戦闘中 · Boss Lv.{challenge.level}
           </p>
-          <span className="text-[10px] text-violet-400 shrink-0">{percent}%</span>
+          <span className="text-[10px] font-semibold text-rose-500 shrink-0">
+            HP {hp}/{maxHp}
+          </span>
         </div>
         <p className="text-xs text-gray-600 truncate mb-1.5">{challenge.title}</p>
-        <div className="h-1.5 rounded-full bg-violet-100 overflow-hidden">
+        <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden">
           <div
-            className="h-full rounded-full bg-violet-500 transition-all"
-            style={{ width: `${percent}%` }}
+            className={`h-full rounded-full bg-gradient-to-r ${barColor} transition-all`}
+            style={{ width: `${pct}%` }}
           />
         </div>
         <p className="text-[10px] text-violet-400 mt-1">
-          {remainingLabel(done, target)}
+          残り弱点 {hp} 個 · タップして攻撃
         </p>
       </Link>
     );
@@ -56,17 +73,19 @@ export default function BossProgress({ challenge, current, compact }: Props) {
           <p className="text-sm font-bold text-gray-800 truncate">{challenge.title}</p>
           <p className="text-xs text-gray-400 truncate">#{challenge.theme}</p>
         </div>
-        <span className="text-lg font-bold text-violet-600 shrink-0">{percent}%</span>
+        <span className="text-sm font-bold text-rose-500 shrink-0">
+          HP {hp}/{maxHp}
+        </span>
       </div>
 
-      <div className="mt-3 h-2.5 rounded-full bg-violet-100 overflow-hidden">
+      <div className="mt-3 h-3 rounded-full bg-gray-200 overflow-hidden ring-1 ring-gray-100">
         <div
-          className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 transition-all"
-          style={{ width: `${percent}%` }}
+          className={`h-full rounded-full bg-gradient-to-r ${barColor} transition-all duration-500`}
+          style={{ width: `${pct}%` }}
         />
       </div>
-      <p className="text-xs text-violet-500 mt-1.5 font-medium">
-        {remainingLabel(done, target)}（{done}/{target}）
+      <p className="text-xs text-gray-500 mt-1.5 font-medium">
+        {hp > 0 ? `残りの弱点 ${hp} 個を崩せば撃破！` : "撃破！🎉"}
       </p>
     </div>
   );

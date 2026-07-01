@@ -7,28 +7,31 @@ import { ThoughtChallenge } from "@/types/memo";
 // （supabase を使う組み立ては challengeClient.ts 側に置く）
 // =====================================================================
 
-// 進行率(0..100)。進んだメモ数 / 必要数。
-export function progressPercent(current: number, target: number): number {
-  if (target <= 0) return 100;
-  return Math.min(100, Math.round((current / target) * 100));
+// ---- RPG バトル: HP は「弱点(問い)の数」。崩した弱点ぶん HP が減る ----
+
+// ボスの総HP＝弱点(問い)の数。無ければ target_count を代用。
+export function bossMaxHp(challenge: ThoughtChallenge): number {
+  return challenge.questions?.length || challenge.target_count || 1;
 }
 
-// 進んだメモ数（進行率と必要数から逆算）。ログ数が取れない画面用のフォールバック。
-export function clearedCount(challenge: ThoughtChallenge): number {
-  return Math.round((challenge.progress / 100) * challenge.target_count);
+// 崩した弱点数。exact（ログ由来の正確な数）があればそれを、無ければ進行率から逆算。
+export function brokenCountOf(
+  challenge: ThoughtChallenge,
+  exact?: number,
+): number {
+  if (typeof exact === "number") return Math.min(exact, bossMaxHp(challenge));
+  return Math.round((challenge.progress / 100) * bossMaxHp(challenge));
 }
 
-// あと何メモでクリアかを表す文言。
-export function remainingLabel(current: number, target: number): string {
-  const left = Math.max(0, target - current);
-  if (left <= 0) return "クリア条件を達成しました 🎉";
-  return `あと ${left} メモでクリア`;
+// 残りHP。
+export function hpRemaining(max: number, broken: number): number {
+  return Math.max(0, max - broken);
 }
 
-// 進行バー用のブロック表現（██████░░░░）。10 分割。
-export function progressBar(percent: number, size = 10): string {
-  const filled = Math.round((percent / 100) * size);
-  return "█".repeat(filled) + "░".repeat(Math.max(0, size - filled));
+// 残りHPの割合(0..100)。HPバー幅に使う。
+export function hpPercent(max: number, broken: number): number {
+  if (max <= 0) return 0;
+  return Math.max(0, Math.round(((max - broken) / max) * 100));
 }
 
 // Boss のレベルに応じた絵文字（見た目の変化づけ）。
