@@ -108,6 +108,20 @@ export async function summonBoss(
   return data as ThoughtChallenge;
 }
 
+// 戦闘中の Boss を諦める（撤退）。status を abandoned にして戦線から外す。
+export async function abandonChallenge(
+  challenge: ThoughtChallenge,
+): Promise<ThoughtChallenge> {
+  const { data, error } = await supabase
+    .from("thought_challenges")
+    .update({ status: "abandoned", updated_at: new Date().toISOString() })
+    .eq("id", challenge.id)
+    .select("*")
+    .single();
+  if (error || !data) throw new Error("ボスから撤退できませんでした");
+  return data as ThoughtChallenge;
+}
+
 export type AdvanceResult = {
   challenge: ThoughtChallenge;
   landed: boolean; // 攻撃が命中し弱点を崩したか

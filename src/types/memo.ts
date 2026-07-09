@@ -32,7 +32,7 @@ export type RelatedMemo = {
 
 // ---- V6: Thought Boss（思考チャレンジ） ----------------------------
 
-export type ChallengeStatus = "active" | "cleared";
+export type ChallengeStatus = "active" | "cleared" | "abandoned";
 
 // クリア時に AI が返す総評
 export type ChallengeFeedback = {

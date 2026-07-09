@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS thought_challenges (
   title         TEXT NOT NULL,                      -- Boss タイトル
   description   TEXT NOT NULL DEFAULT '',           -- AI の投げかけ（最初の問い）
   questions     JSONB NOT NULL DEFAULT '[]'::jsonb, -- 深掘りステップ（文字列配列）
-  status        TEXT NOT NULL DEFAULT 'active',     -- active | cleared
+  status        TEXT NOT NULL DEFAULT 'active',     -- active | cleared | abandoned
   progress      INTEGER NOT NULL DEFAULT 0,         -- 進行率 0..100
   target_count  INTEGER NOT NULL DEFAULT 3,         -- クリアに必要な追加メモ数
   level         INTEGER NOT NULL DEFAULT 1,         -- Boss Lv.

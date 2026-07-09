@@ -12,6 +12,7 @@ import {
   fetchLogs,
   summonBoss,
   advanceChallenge,
+  abandonChallenge,
   activeChallengeOf,
   brokenSetOf,
 } from "@/lib/challengeClient";
@@ -117,6 +118,29 @@ export default function ChallengesPage() {
     } finally {
       setBusy(false);
       setPendingId(null);
+    }
+  };
+
+  // 戦闘中の Boss を諦める（撤退）
+  const handleAbandon = async () => {
+    if (!active || busy) return;
+    if (
+      !window.confirm(
+        `「${active.title}」から撤退しますか？\nこのボスは戦線から外れ、進行状況は残りません。`,
+      )
+    )
+      return;
+    setBusy(true);
+    setError(null);
+    setNote(null);
+    try {
+      await abandonChallenge(active);
+      await refresh();
+      topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "エラーが発生しました");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -259,6 +283,16 @@ export default function ChallengesPage() {
             {active ? (
               <>
                 <BossProgress challenge={active} broken={brokenCount} />
+
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleAbandon}
+                    disabled={busy}
+                    className="text-xs text-gray-400 hover:text-rose-500 underline underline-offset-2 transition-colors disabled:opacity-40"
+                  >
+                    🏳️ このボスから撤退する
+                  </button>
+                </div>
 
                 {/* ボスの挑発 */}
                 <section className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5">
