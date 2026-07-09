@@ -42,6 +42,19 @@ export function activeChallengeOf(
   return challenges.find((c) => c.status === "active") ?? null;
 }
 
+// そのメモから次に出現するボスのレベル。撃破(cleared)したボス数 + 1。
+// 撤退(abandoned)や進行中(active)は数えないので、諦めてもレベルは上がらない。
+// summonBoss のレベル計算と一致させること。
+export function nextLevelForMemo(
+  challenges: ThoughtChallenge[],
+  memoId: string,
+): number {
+  const cleared = challenges.filter(
+    (c) => c.memo_id === memoId && c.status === "cleared",
+  ).length;
+  return cleared + 1;
+}
+
 export async function fetchActiveChallenge(): Promise<ThoughtChallenge | null> {
   const { data } = await supabase
     .from("thought_challenges")
@@ -81,10 +94,13 @@ export async function summonBoss(
   if (!res.ok) throw new Error("チャレンジの生成に失敗しました");
   const gen = (await res.json()) as GeneratedChallenge;
 
-  // Lv は既存チャレンジ数 + 1。
+  // Lv はメモごとに 1 から。そのメモで撃破(cleared)したボス数 + 1。
+  // 撤退(abandoned)は数えないので、諦めてもレベルは上がらない。
   const { count } = await supabase
     .from("thought_challenges")
-    .select("id", { count: "exact", head: true });
+    .select("id", { count: "exact", head: true })
+    .eq("memo_id", seedMemo.id)
+    .eq("status", "cleared");
   const level = (count ?? 0) + 1;
 
   const { data, error } = await supabase

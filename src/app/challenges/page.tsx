@@ -15,6 +15,7 @@ import {
   abandonChallenge,
   activeChallengeOf,
   brokenSetOf,
+  nextLevelForMemo,
 } from "@/lib/challengeClient";
 
 export default function ChallengesPage() {
@@ -487,9 +488,14 @@ export default function ChallengesPage() {
                                 )}
                               </span>
                               <div className="min-w-0 flex-1">
-                                <p className="text-sm font-medium text-gray-700 truncate">
-                                  {m.title ?? "(無題)"}
-                                </p>
+                                <div className="flex items-center gap-1.5">
+                                  <p className="text-sm font-medium text-gray-700 truncate min-w-0">
+                                    {m.title ?? "(無題)"}
+                                  </p>
+                                  <span className="shrink-0 text-[10px] font-bold text-violet-600 bg-violet-100 rounded-full px-1.5 py-0.5">
+                                    次 Lv.{nextLevelForMemo(challenges, m.id)}
+                                  </span>
+                                </div>
                                 {m.summary && (
                                   <p className="text-xs text-gray-400 truncate">
                                     {m.summary}
@@ -506,7 +512,11 @@ export default function ChallengesPage() {
                       disabled={busy || !seedMemo}
                       className="w-full text-sm text-white bg-violet-500 hover:bg-violet-600 rounded-xl px-5 py-2.5 transition-colors disabled:opacity-40"
                     >
-                      {busy ? "出現中..." : "⚔️ このメモでボスを出現させる"}
+                      {busy
+                        ? "出現中..."
+                        : seedMemo
+                          ? `⚔️ このメモでボスを出現させる（Lv.${nextLevelForMemo(challenges, seedMemo.id)}）`
+                          : "⚔️ このメモでボスを出現させる"}
                     </button>
                   </>
                 )}
