@@ -31,6 +31,8 @@ export default function ChallengesPage() {
   const [celebration, setCelebration] = useState<ThoughtChallenge | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [expandedWeapon, setExpandedWeapon] = useState<string | null>(null);
+  // ボスの起点にするメモ（未選択なら最新メモを既定にする）
+  const [seedId, setSeedId] = useState<string | null>(null);
   const topRef = useRef<HTMLDivElement | null>(null);
 
   const active = activeChallengeOf(challenges);
@@ -80,13 +82,14 @@ export default function ChallengesPage() {
     if (session) refresh();
   }, [session, refresh]);
 
-  // 最新メモを種に Boss を召喚
-  const handleSummon = async () => {
-    if (!session || memos.length === 0) return;
+  // 選んだメモ（未選択なら最新メモ）を種に Boss を召喚
+  const handleSummon = async (seedMemo: Memo) => {
+    if (!session) return;
     setBusy(true);
     setError(null);
     try {
-      await summonBoss(session.user.id, memos[0]);
+      await summonBoss(session.user.id, seedMemo);
+      setSeedId(null);
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "エラーが発生しました");
@@ -185,6 +188,9 @@ export default function ChallengesPage() {
   const candidateMemos = active
     ? memos.filter((m) => m.id !== active.memo_id && !linkedIds.has(m.id)).slice(0, 6)
     : [];
+
+  // 起点に選んでいるメモ（未選択なら最新メモを既定にする）
+  const seedMemo = memos.find((m) => m.id === seedId) ?? memos[0] ?? null;
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -402,25 +408,74 @@ export default function ChallengesPage() {
               </>
             ) : (
               /* Boss 未出現 */
-              <section className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 text-center">
-                <p className="text-4xl mb-3">👾</p>
-                <p className="text-sm font-semibold text-gray-700 mb-1">
-                  出現中のボスはいません
-                </p>
-                <p className="text-xs text-gray-400 mb-4">
-                  最新のメモから AI が「思考のボス」を出現させます
-                </p>
-                <button
-                  onClick={handleSummon}
-                  disabled={busy || memos.length === 0}
-                  className="text-sm text-white bg-violet-500 hover:bg-violet-600 rounded-xl px-5 py-2.5 transition-colors disabled:opacity-40"
-                >
-                  {busy
-                    ? "出現中..."
-                    : memos.length === 0
-                      ? "先にメモを作成してください"
-                      : "⚔️ ボスを出現させる"}
-                </button>
+              <section className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
+                <div className="text-center">
+                  <p className="text-4xl mb-3">👾</p>
+                  <p className="text-sm font-semibold text-gray-700 mb-1">
+                    出現中のボスはいません
+                  </p>
+                  <p className="text-xs text-gray-400 mb-4">
+                    起点にするメモを選ぶと、そのメモから AI が「思考のボス」を出現させます
+                  </p>
+                </div>
+
+                {memos.length === 0 ? (
+                  <p className="text-center text-sm text-gray-400">
+                    先にメモを作成してください
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                      起点にするメモを選ぶ
+                    </p>
+                    <ul className="space-y-2 max-h-64 overflow-y-auto pr-1 mb-4">
+                      {memos.map((m) => {
+                        const selected = seedMemo?.id === m.id;
+                        return (
+                          <li key={m.id}>
+                            <button
+                              type="button"
+                              onClick={() => setSeedId(m.id)}
+                              disabled={busy}
+                              className={`w-full text-left flex items-start gap-2 border rounded-xl px-3 py-2 transition-colors disabled:opacity-50 ${
+                                selected
+                                  ? "border-violet-400 bg-violet-50 ring-1 ring-violet-200"
+                                  : "border-gray-100 hover:border-gray-200"
+                              }`}
+                            >
+                              <span
+                                className={`shrink-0 mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center ${
+                                  selected ? "border-violet-500" : "border-gray-300"
+                                }`}
+                              >
+                                {selected && (
+                                  <span className="w-2 h-2 rounded-full bg-violet-500" />
+                                )}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-gray-700 truncate">
+                                  {m.title ?? "(無題)"}
+                                </p>
+                                {m.summary && (
+                                  <p className="text-xs text-gray-400 truncate">
+                                    {m.summary}
+                                  </p>
+                                )}
+                              </div>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <button
+                      onClick={() => seedMemo && handleSummon(seedMemo)}
+                      disabled={busy || !seedMemo}
+                      className="w-full text-sm text-white bg-violet-500 hover:bg-violet-600 rounded-xl px-5 py-2.5 transition-colors disabled:opacity-40"
+                    >
+                      {busy ? "出現中..." : "⚔️ このメモでボスを出現させる"}
+                    </button>
+                  </>
+                )}
               </section>
             )}
 
