@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "VoiceMemo — AIが整理する音声メモ",
+  title: "Boiss Memo — AIが整理する音声メモ",
   description: "思いついたアイデアをすぐ保存し、AIが整理する音声メモアプリ",
 };
 

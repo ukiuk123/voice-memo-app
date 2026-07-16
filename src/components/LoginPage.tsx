@@ -16,7 +16,7 @@ export default function LoginPage() {
     <main className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-10 flex flex-col items-center gap-6 w-80">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-800">🎙️ VoiceMemo</h1>
+          <h1 className="text-2xl font-bold text-gray-800">🎙️ Boiss Memo</h1>
           <p className="text-sm text-gray-400 mt-2">
             AIが整理する音声メモアプリ
           </p>

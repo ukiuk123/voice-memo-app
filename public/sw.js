@@ -1,14 +1,14 @@
-// VoiceMemo Web Push Service Worker
+// Boiss Memo Web Push Service Worker
 
 self.addEventListener("push", (event) => {
   let data = {};
   try {
     data = event.data ? event.data.json() : {};
   } catch {
-    data = { title: "VoiceMemo", body: event.data ? event.data.text() : "" };
+    data = { title: "Boiss Memo", body: event.data ? event.data.text() : "" };
   }
 
-  const title = data.title || "🔔 VoiceMemo";
+  const title = data.title || "🔔 Boiss Memo";
   const body = data.body || "リマインドの時間です";
   const url = data.url || "/";
 

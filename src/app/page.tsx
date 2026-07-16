@@ -155,7 +155,7 @@ export default function HomePage() {
         <header className="pt-12 pb-8">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-gray-800 tracking-tight whitespace-nowrap">
-              🎙️ VoiceMemo
+              🎙️ Boiss Memo
             </h1>
             <p className="text-xs text-gray-400 truncate min-w-0">
               {session.user.email}
